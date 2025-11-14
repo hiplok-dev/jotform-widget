@@ -3,69 +3,57 @@
 <head>
   <meta charset="UTF-8">
   <style>
-    body { 
-      margin: 0; 
-      padding: 0; 
-      width: 1px;
-      height: 1px; 
-      overflow: hidden; 
-    }
+    body { margin: 0; padding: 0; width: 1px; height: 1px; overflow: hidden; }
   </style>
 </head>
 <body>
   <script type="text/javascript">
     (function() {
-      // Listen for messages from JotForm parent frame
+      console.log('JotForm redirect widget loaded');
+      
+      // Listen for ANY message from JotForm
       window.addEventListener('message', function(e) {
-        if (e.origin.indexOf('jotform.com') > -1) {
-          console.log('Widget received message:', e.data);
-          
+        console.log('Widget received message from:', e.origin);
+        console.log('Message data:', e.data);
+        
+        if (e.origin.indexOf('jotform') > -1) {
           var redirectUrl = null;
           
-          // Parse the message data
+          // Try to extract URL from various message formats
           if (typeof e.data === 'string') {
+            // Check if it's a direct URL
+            if (e.data.indexOf('xrygxb-ja.myshopify.com') > -1) {
+              redirectUrl = e.data;
+            }
+            // Try to parse as JSON
             try {
               var parsed = JSON.parse(e.data);
-              redirectUrl = parsed.href || parsed.url || parsed.thankYouUrl || parsed.redirectUrl;
-            } catch(err) {
-              if (e.data.indexOf('http') === 0) {
-                redirectUrl = e.data;
-              }
-            }
-          } else if (typeof e.data === 'object') {
-            redirectUrl = e.data.href || e.data.url || e.data.thankYouUrl || e.data.redirectUrl;
+              redirectUrl = parsed.href || parsed.url || parsed.thankYouUrl || parsed.redirectUrl || parsed.action;
+            } catch(err) {}
+          } else if (typeof e.data === 'object' && e.data !== null) {
+            redirectUrl = e.data.href || e.data.url || e.data.thankYouUrl || e.data.redirectUrl || e.data.action;
           }
           
-          // If we found a Shopify URL, redirect the top window
+          // If we found a Shopify URL, redirect
           if (redirectUrl && redirectUrl.indexOf('xrygxb-ja.myshopify.com') > -1) {
             console.log('Redirecting to:', redirectUrl);
-            window.top.location.href = redirectUrl;
+            try {
+              window.top.location.href = redirectUrl;
+            } catch(e) {
+              console.error('Redirect failed:', e);
+            }
           }
         }
-      });
+      }, false);
       
-      // Also try to override parent location changes
-      try {
-        if (window.parent && window.parent.parent) {
-          var grandparent = window.parent.parent;
-          var originalLocation = grandparent.location;
-          
-          Object.defineProperty(grandparent, 'location', {
-            set: function(url) {
-              if (url && typeof url === 'string' && url.indexOf('http') === 0) {
-                window.top.location.href = url;
-              } else {
-                originalLocation.href = url;
-              }
-            },
-            get: function() {
-              return originalLocation;
-            }
-          });
-        }
-      } catch(e) {
-        // Cross-origin restriction, that's okay
-      }
+      // Also monitor for form submission completion
+      setInterval(function() {
+        try {
+          // Send a message to parent asking for redirect URL
+          window.parent.postMessage({action: 'getRedirectUrl'}, '*');
+        } catch(e) {}
+      }, 1000);
+      
     })();
   </script>
 </body>
